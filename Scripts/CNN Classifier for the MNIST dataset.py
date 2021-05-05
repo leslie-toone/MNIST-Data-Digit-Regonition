@@ -1,19 +1,17 @@
 # code to build, compile and fit a convolutional neural network (CNN) model to the MNIST dataset of images of
 # handwritten digits.
 
-# Run this cell first to import all required packages. Do not make any imports elsewhere in the notebook
-import matplotlib
-import tensorflow as tf
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, Softmax, MaxPooling2D
-import pandas as pd
-import numpy as np
-from tensorflow.keras.models import Sequential
 import matplotlib.pyplot as plt
-from keras.utils import to_categorical
-from keras.optimizers import SGD
+import numpy as np
+import pandas as pd
+# Run this cell first to import all required packages. Do not make any imports elsewhere in the notebook
+import tensorflow as tf
 from keras.layers import BatchNormalization
+from keras.utils import to_categorical
+from matplotlib.ticker import MaxNLocator
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
+from tensorflow.keras.models import Sequential
 
-# If you would like to make further imports from Tensorflow, add them here
 '''The MNIST dataset consists of a training set of 60,000 handwritten digits with corresponding labels, and a test set 
 of 10,000 images. The images have been normalised and centred. The dataset is frequently used in machine learning 
 research, and has become a standard benchmark for image classification models.
@@ -45,6 +43,15 @@ plt.show()
 
 # Complete the following function.
 print(train_images.shape)  # (60000,28, 28)--number of samples, height of image, width of image
+
+# frequency chart
+unique, counts = np.unique(y, return_counts=True)
+plt.bar(unique, counts)
+plt.xticks(unique)
+plt.xlabel("Digits")
+plt.ylabel("Quantity")
+plt.title("Digits in MNIST 784 dataset")
+plt.show()
 
 
 def scale_mnist_data(xtrain, xtest, ytrain, ytest):
@@ -119,7 +126,7 @@ def get_model(input_shape):
 
 
 # the assignment asks for the model above, but I want to compare my answers with machinelearningmastery.com
-def get_model(input_shape):
+def get_model():
     model = Sequential(
         [Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', input_shape=(28, 28, 1),
                 name='Conv2D_layer_1'),
@@ -132,14 +139,16 @@ def get_model(input_shape):
     return model
 
 
-model = get_model(scaled_train_images[0].shape)
+model = get_model()
 print(model.summary())  # this is easier to read
 
 # compile the model
 
 #     Optimizers in machine learning are used to tune the parameters of a neural network
 #     in order to minimize the cost function.Contrary to what many believe, the loss function is not the same thing as
-#     the cost function. While the loss function computes the distance of a single prediction from its actual value, the cost function is usually more general. Indeed, the cost function can be, for example, the sum of loss functions over the training set plus some regularization.
+#     the cost function. While the loss function computes the distance of a single prediction from its actual value,
+#     the cost function is usually more general. Indeed, the cost function can be, for example, the sum of loss
+#     functions over the training set plus some regularization.
 
 #     Compile the model using the Adam optimiser (with default settings),
 #     the cross-entropy loss function and accuracy as the only metric."""
@@ -169,16 +178,17 @@ def compile_model(model):
 
 compile_model(model)
 
-#####FIT THE MODEL TO THE TRAINING DATA############################
+# FIT THE MODEL TO THE TRAINING DATA############################
 print(scaled_train_images.shape)
 
 
-def train_model(scaled_train_images, train_labels):
-    history = model.fit(scaled_train_images, train_labels, epochs=5, batch_size=256)
+def train_model(scaled_train_images, train_labels, scaled_test_images, test_labels):
+    history = model.fit(scaled_train_images, train_labels, epochs=5, batch_size=256,
+                        validation_data=(scaled_test_images, test_labels))
     return history
 
 
-history = train_model(scaled_train_images, train_labels)
+history = train_model(scaled_train_images, train_labels, scaled_test_images, test_labels)
 
 # Plot the learning curves
 # We will now plot two graphs:
@@ -187,13 +197,17 @@ history = train_model(scaled_train_images, train_labels)
 # We will load the model history into a pandas DataFrame and use the plot method to output
 # the required graphs.
 frame = pd.DataFrame(history.history)
-acc_plot = frame.plot(y="accuracy", title="Accuracy vs Epochs Training Data", legend=False)
-acc_plot.set(xlabel="Epochs", ylabel="Accuracy")
+print(frame.columns)
+
+plt = frame.plot(y=["accuracy", "val_accuracy"], color=['b', 'g'], xlabel="Epochs",
+                 ylabel=["Train Accuracy", "Validation Accuracy"], title='Accuracy vs Epochs', legend=True)
+plt.xaxis.set_major_locator(MaxNLocator(integer=True))
 
 # Run this cell to make the Loss vs Epochs plot
 frame2 = pd.DataFrame(history.history)
-acc_plot = frame.plot(y="loss", title="Loss vs Epochs Training Data", legend=False)
-acc_plot.set(xlabel="Epochs", ylabel="Loss")
+plt2 = frame2.plot(y=["loss", "val_loss"], color=['b', 'g'], xlabel="Epochs",
+                   ylabel=["Train Loss", "Validation Loss"], title='Loss vs Epochs', legend=True)
+plt2.xaxis.set_major_locator(MaxNLocator(integer=True))
 
 # The returned history object holds a dictionay record of the loss values and
 # metric value(s) during training for each Epoch (in this case length 2)
@@ -259,16 +273,15 @@ plt.show()
 # define_model() function with batch normalization is listed below.
 
 # this function builds the model and compiles in one step (vs what we did early, building 2 functions)
-def define_model(input_shape):
+def define_model():
     model = Sequential(
-        [Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', input_shape=(28, 28, 1),
-                name='Conv2D_layer_1'),
+        [Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', input_shape=(28, 28, 1)),
          # default data_format='channels_last'
-         MaxPooling2D((2, 2), name='MaxPool_layer_2'),
-         Flatten(name='Flatten_layer_3'),
-         Dense(100, activation='relu', kernel_initializer='he_uniform', name='Dense_layer_4'),
+         MaxPooling2D((2, 2)),
+         Flatten(),
+         Dense(100, activation='relu', kernel_initializer='he_uniform'),
          BatchNormalization(),
-         Dense(10, activation='softmax', name='Dense_layer_5')
+         Dense(10, activation='softmax')
          ])
     # compile Model
     opt = tf.keras.optimizers.Adam()
@@ -278,7 +291,7 @@ def define_model(input_shape):
     return model
 
 
-model_BatchNorm = define_model(scaled_train_images[0].shape)
+model_BatchNorm = define_model()
 print(model_BatchNorm.summary())
 
 
@@ -299,33 +312,6 @@ def evaluate_model_bn(scaled_test_images, test_labels):
 
 test_loss_BN, test_accuracy_BN = evaluate_model_bn(scaled_test_images, test_labels)
 
-#Batch Norm Accuracy 98.58%, Loss 4.29%
+# Batch Norm Accuracy 98.58%, Loss 4.29%
 print('> Batch Norm Test accuracy: %.3f %%' % (test_accuracy_BN * 100.0))
 print('> Batch Norm Test loss: %.3f %%' % (test_loss_BN * 100.0))
-
-#predictions
-# Run this cell to get model predictions on randomly selected test images
-from keras.models import load_model
-
-num_test_images = scaled_test_images.shape[0]
-
-random_inx = np.random.choice(num_test_images, 4)
-random_test_images = scaled_test_images[random_inx, ...]
-random_test_labels = test_labels[random_inx, ...]
-
-model = load_model('final_model.h5')
-predictions = model.predict(random_test_images)
-
-fig, axes = plt.subplots(4, 2, figsize=(16, 12))
-fig.subplots_adjust(hspace=0.4, wspace=-0.2)
-
-for i, (prediction, image, label) in enumerate(zip(predictions, random_test_images, random_test_labels)):
-    axes[i, 0].imshow(np.squeeze(image))
-    axes[i, 0].get_xaxis().set_visible(False)
-    axes[i, 0].get_yaxis().set_visible(False)
-    axes[i, 0].text(10., -1.5, f'Digit {label}')
-    axes[i, 1].bar(np.arange(len(prediction)), prediction)
-    axes[i, 1].set_xticks(np.arange(len(prediction)))
-    axes[i, 1].set_title(f"Categorical distribution. Model prediction: {np.argmax(prediction)}")
-
-plt.show()
