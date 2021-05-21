@@ -19,6 +19,8 @@ from sklearn import datasets, model_selection
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import regularizers, initializers
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
+import seaborn as sns
+from keras.callbacks import ModelCheckpoint
 
 
 # feature_names is a key with the name of all 4 features.
@@ -32,10 +34,16 @@ def read_in_and_split_data(data):
 
 iris_data = datasets.load_iris()
 print(iris_data.keys())
-# iris is a dictionary. We can see it’s keys using
-print(iris_data.target_names)
+#iris is a dictionary. We can see it’s keys using
+print(iris_data.target_names, iris_data.target)
 
 X, y, train_X, test_X, train_y, test_y = read_in_and_split_data(iris_data)
+
+#convert iris data into a data frame so that I can do some preliminary visual analysis
+iris_df= pd.DataFrame(np.concatenate((iris_data.data, np.array([iris_data.target]).T), axis=1), columns=iris_data.feature_names + ['target'])
+print(iris_df.head())
+# Bivariate Pairwise relationships between columns with seaborn library
+g=sns.pairplot(iris_df, hue="target", size=3, diag_kind="kde")
 
 print('\n X shape= {}'.format(X.shape),
       '\n y shape= {}'.format(y.shape),
@@ -92,36 +100,11 @@ def train_model(model, train_X, train_y, epochs, vs):
     history = model.fit(train_X, train_y, epochs=epochs, validation_split=vs, verbose=0)  # no output verbose=0
     return history
 
-history = train_model(model, train_X, train_y, epochs=80, vs=.15)
+history = train_model(model, train_X, train_y, epochs=500, vs=.15)
 
 test_loss, test_acc = model.evaluate(test_X, test_y, verbose=0)
 print("Neural Net Model--No Regularization")
 print("Test loss: {:.3f}\nTest accuracy: {:.2f}%".format(test_loss, 100 * test_acc))
-
-'''
-# Run this cell to plot the epoch vs accuracy graph
-try:
-    plt.plot(history.history['accuracy'])
-    plt.plot(history.history['val_accuracy'])
-except KeyError:
-    plt.plot(history.history['acc'])
-    plt.plot(history.history['val_acc'])
-plt.title('Accuracy vs. epochs')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Training', 'Validation'], loc='lower right')
-plt.show()
-
-#Run this cell to plot the epoch vs loss graph
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Loss vs. epochs')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Training', 'Validation'], loc='upper right')
-plt.show()
-'''
-
 
 # To prevent overfitting, lets regularise the model.
 # Use the same specs as the original model, but add 2 dropout layers, weight decay, and batch normalisation
@@ -153,43 +136,10 @@ reg_model = get_reg_model(train_X.shape[1], 0.3, 0.001)
 
 compile_model(reg_model)
 
-reg_history = train_model(reg_model, train_X, train_y, epochs=80, vs=.15)
+reg_history = train_model(reg_model, train_X, train_y, epochs=500, vs=.15)
 test_loss, test_acc = reg_model.evaluate(test_X, test_y, verbose=0)
 print("Neural Net Model--With Regularization")
 print("Test loss: {:.3f}\nTest accuracy: {:.2f}%".format(test_loss, 100 * test_acc))
-
-# Run this cell to plot the epoch vs accuracy graph
-plt.subplot(1, 2, 1)
-plt.plot(history.history['accuracy'])
-plt.plot(history.history['val_accuracy'])
-plt.title('Not Regularised')
-plt.ylabel('Accuracy')
-plt.xlabel('Epoch')
-plt.legend(['Training', 'Validation'], loc='lower right')
-plt.subplot(1, 2, 2)
-plt.plot(reg_history.history['accuracy'])
-plt.plot(reg_history.history['val_accuracy'])
-plt.title('Regularised')
-plt.ylabel('Accuracy')
-plt.xlabel('Epoch')
-plt.show()
-# Run this cell to plot the epoch vs loss graph
-plt.subplot(1, 2, 1)
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Not Regularised')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Training', 'Validation'], loc='upper right')
-plt.subplot(1, 2, 2)
-plt.plot(reg_history.history['loss'])
-plt.plot(reg_history.history['val_loss'])
-plt.title('Regularised')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Reg Training', 'Reg Validation'], loc='upper right')
-plt.show()
-
 
 # Regularisation helped reduce overfitting the network
 
@@ -200,46 +150,101 @@ plt.show()
 def get_callbacks():
     # A model.fit() training loop will check at end of every epoch whether the loss is no longer decreasing,
     # considering the min_delta and patience
-    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', mode='min', patience=30)
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', mode='min', patience=30, verbose=1)
     # Models often benefit from reducing the learning rate by a factor of 2-10 once learning stagnates. This callback
     # monitors a quantity and if no improvement is seen for a 'patience' number of epochs, the learning rate is reduced.
     learning_rate_reduction = tf.keras.callbacks.ReduceLROnPlateau(factor=0.2, patience=20)
-    return early_stopping, learning_rate_reduction
+    #Model checkpoint will save the best model observed during training as defined by a chosen performance measure on the validation dataset.
+    mc = ModelCheckpoint('best_model.h5', monitor='val_loss', mode='max', verbose=1, save_best_only=True)
+    return early_stopping, learning_rate_reduction, mc
 
 
 call_model = get_reg_model(train_X.shape[1], 0.3, 0.0001)
 
 compile_model(call_model)
 
-early_stopping, learning_rate_reduction = get_callbacks()
+early_stopping, learning_rate_reduction, mc = get_callbacks()
 
-call_history = call_model.fit(train_X, train_y, epochs=80, validation_split=0.15,
-                              callbacks=[early_stopping, learning_rate_reduction], verbose=0)
+call_history = call_model.fit(train_X, train_y, epochs=200, validation_split=0.15,
+                              callbacks=[early_stopping, learning_rate_reduction, mc], verbose=0)
 
 
-# replot the accuracy and loss graphs
+# plot the accuracy and loss graphs
+
+# Run this cell to plot the epoch vs accuracy graph
+plt.clf()
+plt.subplot(1, 3, 1)
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Not Regularised')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Training', 'Validation'], loc='lower right')
+plt.subplot(1, 3, 2)
+plt.plot(reg_history.history['accuracy'])
+plt.plot(reg_history.history['val_accuracy'])
+plt.title('Regularised')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Training', 'Validation'], loc='lower right')
+plt.subplot(1, 3, 3)
+plt.plot(call_history.history['accuracy'])
+plt.plot(call_history.history['val_accuracy'])
+plt.title('Using Callbacks')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Training', 'Validation'], loc='lower right')
+plt.show()
+
+
+# Run this cell to plot the epoch vs loss graph
+plt.subplot(1, 3, 1)
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Not Regularised')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Training', 'Validation'], loc='upper right')
+plt.subplot(1, 3, 2)
+plt.plot(reg_history.history['loss'])
+plt.plot(reg_history.history['val_loss'])
+plt.title('Regularised')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Reg Training', 'Reg Validation'], loc='upper right')
+plt.subplot(1, 3, 3)
+plt.plot(call_history.history['loss'])
+plt.plot(call_history.history['val_loss'])
+plt.title('Using Callbacks')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Reg Training', 'Reg Validation'], loc='upper right')
+plt.show()
+
+'''
 try:
     plt.plot(call_history.history['accuracy'])
     plt.plot(call_history.history['val_accuracy'])
 except KeyError:
     plt.plot(call_history.history['acc'])
     plt.plot(call_history.history['val_acc'])
-plt.title('Accuracy vs. epochs')
+plt.title('Using Callbacks: Accuracy vs. epochs')
 plt.ylabel('Accuracy')
 plt.xlabel('Epoch')
 plt.legend(['Training', 'Validation'], loc='lower right')
 plt.show()
 plt.plot(call_history.history['loss'])
 plt.plot(call_history.history['val_loss'])
-plt.title('Loss vs. epochs')
+plt.title('Using Callbacks: Loss vs. epochs')
 plt.ylabel('Loss')
 plt.xlabel('Epoch')
 plt.legend(['Training', 'Validation'], loc='upper right')
-plt.show()
+plt.show()'''
+
 # Evaluate the model on the test set
 #Loss is the sum of errors (difference between predicted & actual value)).
 # accuracy is used to measure the algorithm’s performance. It is a percentage #correct/total.
-
-test_loss, test_acc = call_model.evaluate(test_X, test_y, verbose=0)
+saved_model = tf.keras.models.load_model('best_model.h5')
+test_loss, test_acc = saved_model.evaluate(test_X, test_y, verbose=0)
 print("Neural Network Model with regularisation, callbacks, early stopping, and learning rate reduction on plateau")
 print("Test loss: {:.3f}\nTest accuracy: {:.2f}%".format(test_loss, 100 * test_acc))
